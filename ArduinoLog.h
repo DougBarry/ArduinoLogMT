@@ -1,12 +1,16 @@
 /*
-    _   ___ ___  _   _ ___ _  _  ___  _    ___   ___
+    _   ___ ___  _   _ ___ _  _  ___  _    ___   ___ 
    /_\ | _ \   \| | | |_ _| \| |/ _ \| |  / _ \ / __|
   / _ \|   / |) | |_| || || .` | (_) | |_| (_) | (_ |
  /_/ \_\_|_\___/ \___/|___|_|\_|\___/|____\___/ \___|
-
-  Log library for Arduino
-  version 1.1.1
+                                                     
+  Log library for Arduino with support for arbitrary mutex
+  version 1.1.2
   https://github.com/thijse/Arduino-Log
+  Modified by https://github.com/jeffiel
+  https://github.com/jeffiel/ArduinoLogTS
+  Modified by Doug Barry
+  https://github.com/DougBarry/ArduinoLogMT
 
 Licensed under the MIT License <http://opensource.org/licenses/MIT>.
 
@@ -30,7 +34,13 @@ Licensed under the MIT License <http://opensource.org/licenses/MIT>.
 #define PSTR(str) (str)
 #define F(string_literal) (reinterpret_cast<const __FlashStringHelper *>(PSTR(string_literal)))
 #endif
+
+// Pointer to print function
 typedef void (*printfunction)(Print*, int);
+// Pointer to mutex lock function
+typedef bool (*lockfunction)(void);
+// Pointer to mutex unlock function
+typedef void (*unlockfunction)(void);
 
 
 // *************************************************************************
@@ -150,7 +160,7 @@ public:
 	bool getShowLevel() const;
 
 	/**
-	 * Sets a function to be called before each log command.
+	 * Sets a function to be called before each log message is emitted.
 	 * 
 	 * \param f - The function to be called
 	 * \return void
@@ -165,7 +175,7 @@ public:
 	void clearPrefix();
 
 	/**
-	 * Sets a function to be called after each log command.
+	 * Sets a function to be called after each log message is emitted.
 	 * 
 	 * \param f - The function to be called
 	 * \return void
@@ -178,6 +188,22 @@ public:
      * \return void
      */
 	void clearSuffix();
+
+	/**
+	 * Sets a function to be called before each log process begins.
+	 * 
+	 * \param f - The function to be called
+	 * \return void
+	 */
+	void setLockF(lockfunction f);
+
+	/**
+	 * Sets a function to be called after each log process completes.
+	 * 
+	 * \param f - The function to be called
+	 * \return void
+	 */
+	void setUnlockF(unlockfunction f);
 
 	/**
 	 * Output a fatal error message. Output message contains
@@ -348,7 +374,16 @@ private:
 			level = LOG_LEVEL_SILENT;
 		}
 		
-		if(xSemaphoreTake(_semaphore, (TickType_t) 10 )) {
+		// If a lock function exists, call it
+		bool locked = false;
+		if(_lock_function != NULL) {
+			locked = _lock_function();
+		} else {
+			locked = true;
+		}
+
+		// If we got a lock (mutex acquire)
+		if(locked) {
 
 			if (_prefix != NULL)
 			{
@@ -373,7 +408,9 @@ private:
 			{
 			    _logOutput->print(CR);
 			}
-			xSemaphoreGive(_semaphore);
+
+			// Make sure to unlock (mutex release)
+			if(_unlock_function != NULL) _unlock_function();
 		}
 #endif
 	}
@@ -382,10 +419,11 @@ private:
 	int _level;
 	bool _showLevel;
 	Print* _logOutput;
-	SemaphoreHandle_t _semaphore;
 
 	printfunction _prefix = NULL;
 	printfunction _suffix = NULL;
+	lockfunction _lock_function = NULL;
+	unlockfunction _unlock_function = NULL;
 #endif
 };
 

@@ -4,9 +4,13 @@
   / _ \|   / |) | |_| || || .` | (_) | |_| (_) | (_ |
  /_/ \_\_|_\___/ \___/|___|_|\_|\___/|____\___/ \___|
                                                      
-  Log library for Arduino
-  version 1.1.1
+  Log library for Arduino with support for arbitrary mutex
+  version 1.1.2
   https://github.com/thijse/Arduino-Log
+  Modified by https://github.com/jeffiel
+  https://github.com/jeffiel/ArduinoLogTS
+  Modified by Doug Barry
+  https://github.com/DougBarry/ArduinoLogMT
 
 Licensed under the MIT License <http://opensource.org/licenses/MIT>.
 
@@ -37,8 +41,6 @@ void Logging::begin(int level, Print* logOutput, bool showLevel)
 	setLevel(level);
 	setShowLevel(showLevel);
 	_logOutput = logOutput;
-	_semaphore = xSemaphoreCreateMutex();
-	xSemaphoreGive(_semaphore);
 #endif
 }
 
@@ -101,6 +103,21 @@ void Logging::clearSuffix()
 	_suffix = nullptr;
 #endif
 }
+
+void Logging::setLockF(lockfunction f)
+{
+#ifndef DISABLE_LOGGING
+	_lock_function = f;
+#endif
+}
+
+void Logging::setUnlockF(unlockfunction f)
+{
+#ifndef DISABLE_LOGGING
+	_unlock_function = f;
+#endif
+}
+
 
 void Logging::print(const __FlashStringHelper *format, va_list args)
 {
@@ -264,5 +281,5 @@ void Logging::printFormat(const char format, va_list *args) {
 	}
 #endif
 }
- 
+
 Logging Log = Logging();

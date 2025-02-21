@@ -1,5 +1,6 @@
 #include <ArduinoLog.h>
 #include <Ethernet.h>
+#include <mutex>
 /*
     _   ___ ___  _   _ ___ _  _  ___  _    ___   ___
    /_\ | _ \   \| | | |_ _| \| |/ _ \| |  / _ \ / __|
@@ -10,6 +11,8 @@
  Licensed under the MIT License <http://opensource.org/licenses/MIT>.
 
  This example sketch shows most of the features of the ArduinoLog library
+ 
+ 2025-02-21 @DougBarry - Added a mutex example (untested)
 
 */
 
@@ -17,6 +20,7 @@ const char * charArray                 = "this is a string";
 const char   flashCharArray1[] PROGMEM = "this is a string";
 String       stringValue1              = "this is a string";
 IPAddress   ipAdress(192, 168, 0, 1);
+SemaphoreHandle_t _semaphore;
 
 void setup() {
     // Set up serial port and wait until connected
@@ -28,7 +32,23 @@ void setup() {
     Log.setSuffix(printSuffix); // set suffix 
     Log.begin(LOG_LEVEL_VERBOSE, &Serial);
     Log.setShowLevel(false);    // Do not show loglevel, we will do this in the prefix
+
+    _semaphore = xSemaphoreCreateMutex();
+	xSemaphoreGive(_semaphore);
+
+    Log.setLockF(log_lock_function);
+    Log.setUnlockF(log_unlock_function);
+
 }
+
+bool log_lock_function() {
+    return xSemaphoreTake(_semaphore, (TickType_t) 10 );
+}
+
+void log_unlock_function() {
+    xSemaphoreGive(_semaphore);
+}
+
 
 void loop() {
     // set up some random variables
@@ -40,7 +60,7 @@ void loop() {
     Log.traceln    (  "Log local Flash string value   : %S" CR, flashCharArray2     );
     Log.notice     (  "Log string value               : %s" CR, stringValue1.c_str());
     Log.verboseln  (F("Log ip adress                  : %p")  , ipAdress            );
-       
+
     delay(5000);
 }
 
